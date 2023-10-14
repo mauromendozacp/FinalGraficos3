@@ -3,11 +3,18 @@ Shader "Unlit/PlasmaGlobeShader"
     Properties
     {
         _MainTex ("Texture", 2D) = "white" {}
-        _NumRays ("Rays", Int) = 13
+        _NumRays ("Rays Count", Int) = 13
+        _BackgroundColor ("Background Color", Color) = (0.0, 0.0, 0.0, 1)
+        _RaysColor ("Rays Color", Color) = (1.0, 1.0, 1.0, 1.0)
+        _DispersionPercent ("Dispersion Percentage", Range(0, 1)) = 0.25
+        _StartRaysPercent ("Start Rays Percentage", Range(0, 1)) = 1
+        _SphereSizePercent ("Sphere Size Percentage", Range(0, 1)) = 1
+
+        _Test ("Test", Range(0, 1)) = 1
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
+        Tags { "RenderType" = "Opaque" }
         LOD 100
 
         Pass
@@ -20,6 +27,8 @@ Shader "Unlit/PlasmaGlobeShader"
 
             #include "UnityCG.cginc"
 
+            #define iMouse _MousePos
+
             struct appdata
             {
                 float4 vertex : POSITION;
@@ -29,16 +38,26 @@ Shader "Unlit/PlasmaGlobeShader"
             struct v2f
             {
                 float2 uv : TEXCOORD0;
-                UNITY_FOG_COORDS(1)
                 float4 vertex : SV_POSITION;
+
+                UNITY_FOG_COORDS(1)
             };
 
-#define iMouse _MousePos
             float4 iMouse;
 
             sampler2D _MainTex;
             float4 _MainTex_ST;
             int _NumRays;
+            float4 _RaysColor;
+            float _DispersionPercent;
+            float _StartRaysPercent;
+            float _SphereSizePercent;
+
+            float _Test;
+
+            float3x3 m3 = float3x3(  0.00,  0.80,  0.60,
+                                    -0.80,  0.36, -0.48,
+                                    -0.60, -0.48,  0.64 );
 
             v2f vert (appdata v)
             {
@@ -51,7 +70,9 @@ Shader "Unlit/PlasmaGlobeShader"
 
             float2x2 mm2(in float a)
             {
-                float c = cos(a), s = sin(a);
+                float c = cos(a);
+                float s = sin(a);
+    
                 return float2x2(c, -s, s, c);
             }
 
@@ -76,27 +97,6 @@ Shader "Unlit/PlasmaGlobeShader"
                 float2 rg = tex2Dlod(_MainTex, float4((tap + 0.5) / 256.0, 0, 0)).xy;
 
                 return lerp(rg.x, rg.y, fp.z);
-            }
-
-            float flow(in float3 p, in float t)
-            {
-                float z = 2.;
-                float rz = 0.;
-                float3 bp = p;
-
-                float3x3 m3 = float3x3( 0.00, 0.80, 0.60, -0.80, 0.36, -0.48, -0.60, -0.48, 0.64);
-
-                for (int i = 0; i < 10; i++)
-                {
-                    p += _Time.y * .1;
-                    rz += (sin(noise(p + t * 0.8) * 6.) * 0.5 + 0.5) / z;
-                    p = lerp(bp, p, 0.6);
-                    z *= 2.;
-                    p *= 2.01;
-                    p = mul(m3, p);
-                }
-
-                return rz;
             }
 
             //could be improved
@@ -128,13 +128,13 @@ Shader "Unlit/PlasmaGlobeShader"
             float3 path(in float i, in float d)
             {
                 float3 en = float3(0., 0., 1.);
-                float sns2 = sins(d + i * 0.5) * 0.22;
-                float sns = sins(d + i * .6) * 0.21;
+                float sns2 = sins(d + i * 0.5) * _DispersionPercent;
+                float sns = sins(d + i * .6) * _DispersionPercent;
 
                 en.xz = mul(en.xz, mm2((hash(i * 10.569) - .5) * 6.2 + sns2));
                 en.xy = mul(en.xy, mm2((hash(i * 4.732) - .5) * 6.2 + sns));
 
-                return en;
+                return en * _StartRaysPercent;
             }
 
             float2 map(float3 p, float i)
@@ -145,8 +145,8 @@ Shader "Unlit/PlasmaGlobeShader"
 
                 float ins = smoothstep(0.11, .46, lp);
                 float outs = .15 + smoothstep(.0, .15, abs(lp - 1.));
-                p *= ins * outs;
                 float id = ins * outs;
+                p *= ins * outs;
 
                 float rz = segm(p, bg, en) - 0.011;
 
@@ -164,8 +164,7 @@ Shader "Unlit/PlasmaGlobeShader"
                     if (abs(h) < precis || d > maxd) break;
 
                     d += h * 1.2;
-                    float res = map(ro + rd * d, j).x;
-                    h = res;
+                    h = map(ro + rd * d, j).x;
                 }
 
                 return d;
@@ -183,13 +182,14 @@ Shader "Unlit/PlasmaGlobeShader"
                 {
                     r = map(p, j);
                     p += rd * .03;
-                    float lp = length(p);
 
+                    float lp = length(p);
                     float3 col = sin(float3(1.05, 2.5, 1.52) * 3.94 + r.y) * .85 + 0.4;
 
                     col.rgb *= smoothstep(.0, .015, -r.x);
                     col *= smoothstep(0.04, .2, abs(lp - 1.1));
                     col *= smoothstep(0.1, .34, lp);
+
                     sum += abs(col) * 5. * (1.2 - noise(lp * 2. + j * 13. + _Time.y * 5.) * 1.1) / (log(distance(p, orig) - 2.) + .75);
                 }
 
@@ -201,8 +201,8 @@ Shader "Unlit/PlasmaGlobeShader"
             {
                 float3 oc = ro;
                 float b = dot(oc, rd);
-                float c = dot(oc, oc) - 1.;
-                float h = b * b - c;
+                float c = dot(oc, oc) - 1. * _SphereSizePercent;
+                float h = (b * b - c);
 
                 if (h < 0.0)
                 {
@@ -214,10 +214,29 @@ Shader "Unlit/PlasmaGlobeShader"
                 }
             }
 
+            float flow(in float3 p, in float t)
+            {
+                float z=2.;
+                float rz = 0.;
+                float3 bp = p;
+
+                for (float i = 1.; i < 5.; i++)
+                {
+                    p += _Time * .1;
+                    rz += (sin(noise(p + t * 0.8) * 6.) * 0.5 + 0.5) / z;
+                    p = lerp(bp, p, 0.6);
+                    z *= 2.;
+                    p *= 2.01;
+                    p = mul(p, m3);
+                }
+
+                return rz;	
+            }
+
             fixed4 frag(v2f i) : SV_Target
             {
                 float2 p = i.uv - 0.5;
-                float2 um = 0;// iMouse.xy / iResolution.xy - .5;
+                float2 um = iMouse.xy - .5;
 
                 //camera
                 float3 ro = float3(0., 0., 5.);
@@ -236,7 +255,8 @@ Shader "Unlit/PlasmaGlobeShader"
 
                 float3 col = float3(0.0125, 0., 0.025);
 
-                for (float j = 1.; j < _NumRays + 1.; j++)
+                //Rays
+                for (int j = 0; j < _NumRays; j++)
                 {
                     ro = bro;
                     rd = brd;
@@ -246,9 +266,6 @@ Shader "Unlit/PlasmaGlobeShader"
                     ro.xy = mul(ro.xy, mm);
                     rd.xy = mul(rd.xy, mm);
 
-                    ro.xz = mul(ro.xz, mm);
-                    rd.xz = mul(rd.xz, mm);
-
                     float rz = march(ro, rd, 2.5, 6., j);
 
                     if (rz >= 6.) continue;
@@ -257,6 +274,7 @@ Shader "Unlit/PlasmaGlobeShader"
                     col = max(col, vmarch(pos, rd, j, bro));
                 }
 
+                //Sphere
                 ro = bro;
                 rd = brd;
                 float2 sph = iSphere2(ro, rd);
@@ -267,8 +285,8 @@ Shader "Unlit/PlasmaGlobeShader"
                     float3 pos2 = ro + rd * sph.y;
                     float3 rf = reflect(rd, pos);
                     float3 rf2 = reflect(rd, pos2);
-                    float nz = (-log(abs(flow(rf * 1.2, _Time.y) - .01)));
-                    float nz2 = (-log(abs(flow(rf2 * 1.2, -_Time.y) - .01)));
+                    float nz = (-log(abs(flow(rf * 1.2, _Time) - .01)));
+                    float nz2 = (-log(abs(flow(rf2 * 1.2, _Time) - .01)));
 
                     col += (0.1 * nz * nz * float3(0.12, 0.12, .5) + 0.05 * nz2 * nz2 * float3(0.55, 0.2, .55)) * 0.8;
                 }
