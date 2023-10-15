@@ -4,8 +4,10 @@ Shader "Unlit/PlasmaGlobeShader"
     {
         _MainTex ("Texture", 2D) = "white" {}
         _Zoom ("Zoom", Range(0, 5)) = 1.5
+
         _NumRays ("Rays Count", Int) = 13
         _RaysRange ("Rays Range", Range(0, 180)) = 1
+        _RaysSize ("Rays Size", Range(0.5, 2)) = 1
 
         _BackgroundColor ("Background Color", Color) = (0.0, 0.0, 0.0, 1)
         _BackgroundSphereColor ("Background Sphere Color", Color) = (0.0, 0.0, 0.0, 1)
@@ -53,8 +55,10 @@ Shader "Unlit/PlasmaGlobeShader"
 
             sampler2D _MainTex;
             float4 _MainTex_ST;
+
             int _NumRays;
             float _RaysRange;
+            float _RaysSize;
 
             float3 _BackgroundColor;
             float3 _BackgroundSphereColor;
@@ -156,7 +160,9 @@ Shader "Unlit/PlasmaGlobeShader"
                 float id = ins * outs;
                 p *= ins * outs;
 
-                float rz = segm(p, bg, en) - 0.011;
+                float raysSizeBase = 0.011;
+
+                float rz = segm(p, bg, en) - (raysSizeBase * _RaysSize);
 
                 return float2(rz, id);
             }
