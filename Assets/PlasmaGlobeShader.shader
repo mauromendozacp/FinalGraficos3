@@ -3,15 +3,18 @@ Shader "Unlit/PlasmaGlobeShader"
     Properties
     {
         _MainTex ("Texture", 2D) = "white" {}
+        _Zoom ("Zoom", Range(0, 5)) = 1.5
         _NumRays ("Rays Count", Int) = 13
-        _RaysRange ("Rays Range", Range(0, 1)) = 1
+        _RaysRange ("Rays Range", Range(0, 180)) = 1
+
         _BackgroundColor ("Background Color", Color) = (0.0, 0.0, 0.0, 1)
         _BackgroundSphereColor ("Background Sphere Color", Color) = (0.0, 0.0, 0.0, 1)
         _BaseColor ("Base Color", Color) = (1.0, 1.0, 1.0, 1.0)
         _RaysColor ("Rays Color", Color) = (1.0, 1.0, 1.0, 1.0)
+
+        [Toggle] _RaysNoiseActived ("Rays Noise", Float) = 0
         _DispersionPercent ("Dispersion Percentage", Range(0, 1)) = 0.25
         _StartRaysPercent ("Start Rays Percentage", Range(0, 1)) = 1
-        _SphereSizePercent ("Sphere Size Percentage", Range(0, 1)) = 1
 
         _Test ("Test", Range(0, 1)) = 1
     }
@@ -58,9 +61,10 @@ Shader "Unlit/PlasmaGlobeShader"
             float3 _BaseColor;
             float3 _RaysColor;
 
+            bool _RaysNoiseActived;
             float _DispersionPercent;
             float _StartRaysPercent;
-            float _SphereSizePercent;
+            float _Zoom;
 
             float _Test;
 
@@ -82,26 +86,20 @@ Shader "Unlit/PlasmaGlobeShader"
                 return tex2Dlod(_MainTex, float4(x * .01, 1., 0, 0)).x;
             }
 
-            float noise(in float3 p)
-            {
-                float3 ip = floor(p);
-                float3 fp = frac(p);
-                fp = fp * fp * (3.0 - 2.0 * fp);
-
-                float2 tap = (ip.xy + float2(37.0, 17.0) * ip.z) + fp.xy;
-
-                float2 rg = tex2Dlod(_MainTex, float4((tap + 0.5) / 256.0, 0, 0)).xy;
-
-                return lerp(rg.x, rg.y, fp.z);
-            }
-
-            //could be improved
             float sins(in float x)
             {
                 float rz = 0.;
                 float z = 2.;
 
-                for (float i = 0.; i < 3.; i++)
+                int noiseCurr = 3;
+                int noiseMax = 25;
+
+                if (_RaysNoiseActived)
+                {
+                    noiseCurr = noiseMax;
+                }
+
+                for (int i = 0; i < noiseCurr; i++)
                 {
                     rz += abs(frac(x * 1.4) - 0.5) / z;
                     x *= 1.3;
@@ -125,13 +123,14 @@ Shader "Unlit/PlasmaGlobeShader"
                 return float2x2(c, -s, s, c);
             }
 
+            //Patron de rayos
             float3 path(in float i, in float d)
             {
                 float3 en = float3(0., 0., 1.);
                 float sns2 = sins(d + i * 0.5) * _DispersionPercent;
                 float sns = sins(d + i * .6) * _DispersionPercent;
 
-                en.xz = mul(en.xz, mm2(((hash(i * 10.569) - .5) * 6.2 + sns2) * _RaysRange));
+                en.xz = mul(en.xz, mm2(((hash(i * 10.569) - .5) * 6.2 + sns2) * _RaysRange / 180));
                 en.xy = mul(en.xy, mm2((hash(i * 4.732) - .5) * 6.2 + sns));
 
                 return en * _StartRaysPercent;
@@ -194,7 +193,7 @@ Shader "Unlit/PlasmaGlobeShader"
 
                     float lp = length(p);
                     //float3 col = sin(float3(1.05, 2.5, 1.52) * 3.94 + r.y) * .85 + 0.4;
-                    float3 col = sin(_BaseColor + (r.y));
+                    float3 col = sin(_BaseColor + r.y) * cos(_RaysColor - r.y);
 
                     col *= smoothstep(.0, .015, -r.x);
                     col *= smoothstep(0.04, .2, abs(lp - 1.1));
@@ -211,7 +210,7 @@ Shader "Unlit/PlasmaGlobeShader"
             {
                 float3 oc = ro;
                 float b = dot(oc, rd);
-                float c = dot(oc, oc) - 1. * _SphereSizePercent;
+                float c = dot(oc, oc) - 1.;
                 float h = (b * b - c);
 
                 if (h < 0.0)
@@ -226,7 +225,7 @@ Shader "Unlit/PlasmaGlobeShader"
 
             float flow(in float3 p, in float t)
             {
-                float z=2.;
+                float z = 2.;
                 float rz = 0.;
                 float3 bp = p;
 
@@ -250,7 +249,7 @@ Shader "Unlit/PlasmaGlobeShader"
 
                 //camera
                 float3 ro = float3(0., 0., 5.);
-                float3 rd = normalize(float3(p * .7, -1.5));
+                float3 rd = normalize(float3(p * .7, -_Zoom));
                 float2x2 mx = mm2(_Time.y * .4 + um.x * 6.);
                 float2x2 my = mm2(_Time.y * 0.3 + um.y * 6.);
 
@@ -271,7 +270,7 @@ Shader "Unlit/PlasmaGlobeShader"
                     ro = bro;
                     rd = brd;
 
-                    float2x2 mm = mm2((_Time.y * 0.1 + ((j + 1.) * 5.1)) * j * 0.25);
+                    float2x2 mm = mm2((_Time.y * _Test + ((j + 1.) * 5.1)) * j * 0.25);
 
                     ro.xy = mul(ro.xy, mm);
                     rd.xy = mul(rd.xy, mm);
