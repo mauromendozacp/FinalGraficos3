@@ -4,6 +4,7 @@ Shader "Unlit/PlasmaGlobeShader"
     {
         _MainTex ("Texture", 2D) = "white" {}
         _NumRays ("Rays Count", Int) = 13
+        _RaysRange ("Rays Range", Range(0, 1)) = 1
         _BackgroundColor ("Background Color", Color) = (0.0, 0.0, 0.0, 1)
         _BackgroundSphereColor ("Background Sphere Color", Color) = (0.0, 0.0, 0.0, 1)
         _BaseColor ("Base Color", Color) = (1.0, 1.0, 1.0, 1.0)
@@ -50,6 +51,7 @@ Shader "Unlit/PlasmaGlobeShader"
             sampler2D _MainTex;
             float4 _MainTex_ST;
             int _NumRays;
+            float _RaysRange;
 
             float3 _BackgroundColor;
             float3 _BackgroundSphereColor;
@@ -129,7 +131,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 float sns2 = sins(d + i * 0.5) * _DispersionPercent;
                 float sns = sins(d + i * .6) * _DispersionPercent;
 
-                en.xz = mul(en.xz, mm2((hash(i * 10.569) - .5) * 6.2 + sns2));
+                en.xz = mul(en.xz, mm2(((hash(i * 10.569) - .5) * 6.2 + sns2) * _RaysRange));
                 en.xy = mul(en.xy, mm2((hash(i * 4.732) - .5) * 6.2 + sns));
 
                 return en * _StartRaysPercent;
