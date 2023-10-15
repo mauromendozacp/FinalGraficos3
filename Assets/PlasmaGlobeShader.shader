@@ -5,6 +5,8 @@ Shader "Unlit/PlasmaGlobeShader"
         _MainTex ("Texture", 2D) = "white" {}
         _NumRays ("Rays Count", Int) = 13
         _BackgroundColor ("Background Color", Color) = (0.0, 0.0, 0.0, 1)
+        _BackgroundSphereColor ("Background Sphere Color", Color) = (0.0, 0.0, 0.0, 1)
+        _BaseColor ("Base Color", Color) = (1.0, 1.0, 1.0, 1.0)
         _RaysColor ("Rays Color", Color) = (1.0, 1.0, 1.0, 1.0)
         _DispersionPercent ("Dispersion Percentage", Range(0, 1)) = 0.25
         _StartRaysPercent ("Start Rays Percentage", Range(0, 1)) = 1
@@ -48,7 +50,12 @@ Shader "Unlit/PlasmaGlobeShader"
             sampler2D _MainTex;
             float4 _MainTex_ST;
             int _NumRays;
-            float4 _RaysColor;
+
+            float3 _BackgroundColor;
+            float3 _BackgroundSphereColor;
+            float3 _BaseColor;
+            float3 _RaysColor;
+
             float _DispersionPercent;
             float _StartRaysPercent;
             float _SphereSizePercent;
@@ -68,22 +75,9 @@ Shader "Unlit/PlasmaGlobeShader"
                 return o;
             }
 
-            float2x2 mm2(in float a)
-            {
-                float c = cos(a);
-                float s = sin(a);
-    
-                return float2x2(c, -s, s, c);
-            }
-
             float noise(in float x) 
             {
                 return tex2Dlod(_MainTex, float4(x * .01, 1., 0, 0)).x;
-            }
-
-            float hash(float n)
-            {
-                return frac(sin(n) * 43758.5453);
             }
 
             float noise(in float3 p)
@@ -116,13 +110,17 @@ Shader "Unlit/PlasmaGlobeShader"
                 return rz;
             }
 
-            float segm(float3 p, float3 a, float3 b)
+            float hash(float n)
             {
-                float3 pa = p - a;
-                float3 ba = b - a;
-                float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.);
+                return frac(sin(n) * 43758.5453);
+            }
 
-                return length(pa - ba * h) * .5;
+            float2x2 mm2(in float a)
+            {
+                float c = cos(a);
+                float s = sin(a);
+    
+                return float2x2(c, -s, s, c);
             }
 
             float3 path(in float i, in float d)
@@ -135,6 +133,15 @@ Shader "Unlit/PlasmaGlobeShader"
                 en.xy = mul(en.xy, mm2((hash(i * 4.732) - .5) * 6.2 + sns));
 
                 return en * _StartRaysPercent;
+            }
+
+            float segm(float3 p, float3 a, float3 b)
+            {
+                float3 pa = p - a;
+                float3 ba = b - a;
+                float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.);
+
+                return length(pa - ba * h) * .5;
             }
 
             float2 map(float3 p, float i)
@@ -175,7 +182,7 @@ Shader "Unlit/PlasmaGlobeShader"
             {
                 float3 p = ro;
                 float2 r = (0.);
-                float3 sum = (0);
+                float3 sum = (0.);
                 float w = 0.;
 
                 for (int i = 0; i < 15; i++)
@@ -184,13 +191,14 @@ Shader "Unlit/PlasmaGlobeShader"
                     p += rd * .03;
 
                     float lp = length(p);
-                    float3 col = sin(float3(1.05, 2.5, 1.52) * 3.94 + r.y) * .85 + 0.4;
+                    //float3 col = sin(float3(1.05, 2.5, 1.52) * 3.94 + r.y) * .85 + 0.4;
+                    float3 col = sin(_BaseColor + (r.y));
 
-                    col.rgb *= smoothstep(.0, .015, -r.x);
+                    col *= smoothstep(.0, .015, -r.x);
                     col *= smoothstep(0.04, .2, abs(lp - 1.1));
                     col *= smoothstep(0.1, .34, lp);
 
-                    sum += abs(col) * 5. * (1.2 - noise(lp * 2. + j * 13. + _Time.y * 5.) * 1.1) / (log(distance(p, orig) - 2.) + .75);
+                    sum += abs(col) * 5. * (1.2 - noise(lp * 2. + j + _Time.y * 5.) * 1.1) / (log(distance(p, orig) - 2.) + .75);
                 }
 
                 return sum;
@@ -220,7 +228,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 float rz = 0.;
                 float3 bp = p;
 
-                for (float i = 1.; i < 5.; i++)
+                for (int i = 0; i < 5; i++)
                 {
                     p += _Time * .1;
                     rz += (sin(noise(p + t * 0.8) * 6.) * 0.5 + 0.5) / z;
@@ -230,7 +238,7 @@ Shader "Unlit/PlasmaGlobeShader"
                     p = mul(p, m3);
                 }
 
-                return rz;	
+                return rz;
             }
 
             fixed4 frag(v2f i) : SV_Target
@@ -253,7 +261,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 float3 bro = ro;
                 float3 brd = rd;
 
-                float3 col = float3(0.0125, 0., 0.025);
+                float3 col = _BackgroundColor;
 
                 //Rays
                 for (int j = 0; j < _NumRays; j++)
@@ -288,7 +296,8 @@ Shader "Unlit/PlasmaGlobeShader"
                     float nz = (-log(abs(flow(rf * 1.2, _Time) - .01)));
                     float nz2 = (-log(abs(flow(rf2 * 1.2, _Time) - .01)));
 
-                    col += (0.1 * nz * nz * float3(0.12, 0.12, .5) + 0.05 * nz2 * nz2 * float3(0.55, 0.2, .55)) * 0.8;
+                    //col += (0.1 * nz * nz * float3(0.12, 0.12, .5) + 0.05 * nz2 * nz2 * float3(0.55, 0.2, .55)) * 0.8;
+                    col += (nz * nz * _BackgroundSphereColor + 0.05 * nz2 * nz2);
                 }
 
                 return float4(col * 1.3, 1.0);
