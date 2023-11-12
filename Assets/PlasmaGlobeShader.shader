@@ -1,3 +1,7 @@
+// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
+
+// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
+
 Shader "Unlit/PlasmaGlobeShader"
 {
     Properties
@@ -45,10 +49,8 @@ Shader "Unlit/PlasmaGlobeShader"
 
             struct v2f
             {
-                float2 uv : TEXCOORD0;
+                float3 uv : TEXCOORD0;
                 float4 vertex : SV_POSITION;
-
-                UNITY_FOG_COORDS(1)
             };
 
             float4 iMouse;
@@ -80,14 +82,22 @@ Shader "Unlit/PlasmaGlobeShader"
             {
                 v2f o;
                 o.vertex = UnityObjectToClipPos(v.vertex);
-                o.uv = TRANSFORM_TEX(v.uv, _MainTex);
-                UNITY_TRANSFER_FOG(o,o.vertex);
+                o.uv.xy = (v.vertex.xy + 0.5);
+                o.uv.z = (v.vertex.z + 0.5);
                 return o;
             }
 
-            float noise(in float x) 
+            float noise(in float3 x) 
             {
-                return tex2Dlod(_MainTex, float4(x * .01, 1., 0, 0)).x;
+                //return tex2Dlod(_MainTex, float4(x * .01, 1., 0, 0)).x;
+                float3 p = floor(x);
+                float3 f = frac(x);
+                f = f * f * (3.0 - 2.0 * f);
+        
+                float2 uv = (((p.xy + float2(37.0, 17.0) * p.z) + f.xy) + 0.5) / 256.0;
+                
+                float2 rg = tex2Dlod(_MainTex, float4(uv.x, uv.y, 0, 0)).yx;
+                return lerp(rg.x, rg.y, f.z);
             }
 
             float sins(in float x)
@@ -201,11 +211,11 @@ Shader "Unlit/PlasmaGlobeShader"
                     //float3 col = sin(float3(1.05, 2.5, 1.52) * 3.94 + r.y) * .85 + 0.4;
                     float3 col = sin(_BaseColor + r.y) * cos(_RaysColor - r.y);
 
-                    col *= smoothstep(.0, .015, -r.x);
+                    col.rgb *= smoothstep(.0, .015, -r.x);
                     col *= smoothstep(0.04, .2, abs(lp - 1.1));
                     col *= smoothstep(0.1, .34, lp);
 
-                    sum += abs(col) * 5. * (1.2 - noise(lp * 2. + j + _Time.y * 5.) * 1.1) / (log(distance(p, orig) - 2.) + .75);
+                    sum += abs(col) * 5. * (1.2 - noise(lp * 2. + j * _NumRays + _Time.y * 5.) * 1.1) / (log(distance(p, orig) - 2.) + .75);
                 }
 
                 return sum;
@@ -217,7 +227,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 float3 oc = ro;
                 float b = dot(oc, rd);
                 float c = dot(oc, oc) - 1.;
-                float h = (b * b - c);
+                float h = b * b - c;
 
                 if (h < 0.0)
                 {
@@ -229,22 +239,38 @@ Shader "Unlit/PlasmaGlobeShader"
                 }
             }
 
-            float flow(in float3 p, in float t)
+            float grid(float3 p)
+            {
+                return sin(p.x) * cos(p.y);
+            }
+
+            float flow(in float3 p)
             {
                 float z = 2.;
                 float rz = 0.;
                 float3 bp = p;
-
-                for (int i = 0; i < 5; i++)
+    
+                for (float i = 1.; i < 5.; i++)
                 {
-                    p += _Time * .1;
-                    rz += (sin(noise(p + t * 0.8) * 6.) * 0.5 + 0.5) / z;
-                    p = lerp(bp, p, 0.6);
+		            //movement
+                    p += _Time.y * 0.25;
+                    bp -= _Time.y * .3;
+		
+		            //displacement map
+                    float3 gr = float3(grid(p * 3. - _Time.y * 1.), grid(p * 3.5 + 4. - _Time.y * 1.), grid(p * 4. + 4. - _Time.y * 1.));
+                    p += gr * 0.15;
+                    rz += (sin(noise(p) * 8.) * 0.5 + 0.5) / z;
+		
+		            //advection factor (.1 = billowing, .9 high advection)
+                    p = lerp(bp, p, .7);
+		
+		            //scale and rotate
                     z *= 2.;
-                    p *= 2.01;
+                    p = mul(p, 2.01);
                     p = mul(p, m3);
+                    bp = mul(bp, 1.7);
+                    bp = mul(bp, m3);
                 }
-
                 return rz;
             }
 
@@ -256,14 +282,15 @@ Shader "Unlit/PlasmaGlobeShader"
                 //camera
                 float3 ro = float3(0., 0., 5.);
                 float3 rd = normalize(float3(p * .7, -_Zoom));
+    
                 float2x2 mx = mm2(_Time.y * .4 + um.x * 6.);
                 float2x2 my = mm2(_Time.y * 0.3 + um.y * 6.);
-
-                ro.xz = mul(ro.xz, mx);
-                rd.xz = mul(rd.xz, mx);
-
+                
                 ro.xy = mul(ro.xy, my);
+                ro.xz = mul(ro.xz, mx);
+                
                 rd.xy = mul(rd.xy, my);
+                rd.xz = mul(rd.xz, mx);
 
                 float3 bro = ro;
                 float3 brd = rd;
@@ -276,14 +303,17 @@ Shader "Unlit/PlasmaGlobeShader"
                     ro = bro;
                     rd = brd;
 
-                    float2x2 mm = mm2((_Time.y * _Test + ((j + 1.) * 5.1)) * j * 0.25);
-
+                    float2x2 mm = mm2((_Time.y * 0.1 + ((j + 1.) * 5.1)) * j * 0.25);
+            
                     ro.xy = mul(ro.xy, mm);
+                    ro.xz = mul(ro.xz, mm);
+        
                     rd.xy = mul(rd.xy, mm);
+                    rd.xz = mul(rd.xz, mm);
 
                     float rz = march(ro, rd, 2.5, 6., j);
 
-                    if (rz >= 6.) continue;
+                    if (rz >= 6.) continue; 
 
                     float3 pos = ro + mul(rz, rd);
                     col = max(col, vmarch(pos, rd, j, bro));
@@ -300,11 +330,11 @@ Shader "Unlit/PlasmaGlobeShader"
                     float3 pos2 = ro + rd * sph.y;
                     float3 rf = reflect(rd, pos);
                     float3 rf2 = reflect(rd, pos2);
-                    float nz = (-log(abs(flow(rf * 1.2, _Time) - .01)));
-                    float nz2 = (-log(abs(flow(rf2 * 1.2, _Time) - .01)));
+                    float nz = (-log(abs(flow(rf * 1.2) - .01)));
+                    float nz2 = (-log(abs(flow(rf2 * 1.2) - .01)));
 
                     //col += (0.1 * nz * nz * float3(0.12, 0.12, .5) + 0.05 * nz2 * nz2 * float3(0.55, 0.2, .55)) * 0.8;
-                    col += (nz * nz * _BackgroundSphereColor + 0.05 * nz2 * nz2);
+                    col += nz * nz * _BackgroundSphereColor + 0.05 * nz2 * nz2;
                 }
 
                 return float4(col * 1.3, 1.0);
