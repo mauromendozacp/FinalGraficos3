@@ -8,10 +8,11 @@ Shader "Unlit/PlasmaGlobeShader"
     {
         _MainTex ("Texture", 2D) = "white" {}
         _Zoom ("Zoom", Range(0, 5)) = 1.5
-
+        
         _NumRays ("Rays Count", Int) = 13
         _RaysRange ("Rays Range", Range(0, 180)) = 1
         _RaysSize ("Rays Size", Range(0.5, 2)) = 1
+        _HearthSize ("Hearth Size", Range(0, 1)) = 1
 
         _BackgroundColor ("Background Color", Color) = (0.0, 0.0, 0.0, 1)
         _BackgroundSphereColor ("Background Sphere Color", Color) = (0.0, 0.0, 0.0, 1)
@@ -61,6 +62,7 @@ Shader "Unlit/PlasmaGlobeShader"
             int _NumRays;
             float _RaysRange;
             float _RaysSize;
+            float _HearthSize;
 
             float3 _BackgroundColor;
             float3 _BackgroundSphereColor;
@@ -89,7 +91,6 @@ Shader "Unlit/PlasmaGlobeShader"
 
             float noise(in float3 x) 
             {
-                //return tex2Dlod(_MainTex, float4(x * .01, 1., 0, 0)).x;
                 float3 p = floor(x);
                 float3 f = frac(x);
                 f = f * f * (3.0 - 2.0 * f);
@@ -164,8 +165,9 @@ Shader "Unlit/PlasmaGlobeShader"
                 float lp = length(p);
                 float3 bg = (0.);
                 float3 en = path(i, lp);
+                float hearthSizeMax = 0.25;
 
-                float ins = smoothstep(0.11, .46, lp);
+                float ins = smoothstep(hearthSizeMax * _HearthSize, 0.45, lp);
                 float outs = .15 + smoothstep(.0, .15, abs(lp - 1.));
                 float id = ins * outs;
                 p *= ins * outs;
