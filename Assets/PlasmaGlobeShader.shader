@@ -1,7 +1,3 @@
-// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
-
-// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
-
 Shader "Unlit/PlasmaGlobeShader"
 {
     Properties
@@ -13,6 +9,7 @@ Shader "Unlit/PlasmaGlobeShader"
         _RaysRange ("Rays Range", Range(0, 180)) = 1
         _RaysSize ("Rays Size", Range(0.5, 2)) = 1
         _HearthSize ("Hearth Size", Range(0, 1)) = 1
+        _Speed ("Speed", Range(0, 5)) = 1
 
         _BackgroundColor ("Background Color", Color) = (0.0, 0.0, 0.0, 1)
         _BackgroundSphereColor ("Background Sphere Color", Color) = (0.0, 0.0, 0.0, 1)
@@ -21,10 +18,10 @@ Shader "Unlit/PlasmaGlobeShader"
 
         [Toggle] _RaysNoiseActived ("Rays Noise", Float) = 0
         _DispersionPercent ("Dispersion Percentage", Range(0, 1)) = 0.25
-        _StartRaysPercent ("Start Rays Percentage", Range(0, 1)) = 1
 
         _Test ("Test", Range(0, 1)) = 1
     }
+
     SubShader
     {
         Tags { "RenderType" = "Opaque" }
@@ -35,7 +32,6 @@ Shader "Unlit/PlasmaGlobeShader"
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            // make fog work
             #pragma multi_compile_fog
 
             #include "UnityCG.cginc"
@@ -63,6 +59,7 @@ Shader "Unlit/PlasmaGlobeShader"
             float _RaysRange;
             float _RaysSize;
             float _HearthSize;
+            float _Speed;
 
             float3 _BackgroundColor;
             float3 _BackgroundSphereColor;
@@ -71,7 +68,6 @@ Shader "Unlit/PlasmaGlobeShader"
 
             bool _RaysNoiseActived;
             float _DispersionPercent;
-            float _StartRaysPercent;
             float _Zoom;
 
             float _Test;
@@ -138,7 +134,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 return float2x2(c, -s, s, c);
             }
 
-            //Patron de rayos
+            //ray's pattern
             float3 path(in float i, in float d)
             {
                 float3 en = float3(0., 0., 1.);
@@ -148,7 +144,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 en.xz = mul(en.xz, mm2((hash(i * 10.569) - .5) * 6.2 + sns2));
                 en.xy = mul(en.xy, mm2((hash(i * 4.732) - .5) * 6.2 + sns));
 
-                return en * _StartRaysPercent;
+                return en;
             }
 
             float segm(float3 p, float3 b)
@@ -206,7 +202,6 @@ Shader "Unlit/PlasmaGlobeShader"
                     p += rd * .03;
 
                     float lp = length(p);
-                    //float3 col = sin(float3(1.05, 2.5, 1.52) * 3.94 + r.y) * .85 + 0.4;
                     float3 col = sin(_BaseColor + r.y) * cos(_RaysColor - r.y);
 
                     col.rgb *= smoothstep(.0, .015, -r.x);
@@ -219,7 +214,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 return sum;
             }
 
-            //returns both collision dists of unit sphere
+            //Returns both collision dists of unit sphere
             float2 iSphere2(in float3 ro, in float3 rd)
             {
                 float3 oc = ro;
@@ -281,8 +276,8 @@ Shader "Unlit/PlasmaGlobeShader"
                 float3 ro = float3(0., 0., 5.);
                 float3 rd = normalize(float3(p * .7, -_Zoom));
     
-                float2x2 mx = mm2(_Time.y * .4 + um.x * 6.);
-                float2x2 my = mm2(_Time.y * 0.3 + um.y * 6.);
+                float2x2 mx = mm2((_Time.y * _Speed) *.4 + um.x * 6.);
+                float2x2 my = mm2((_Time.y * _Speed) *.3 + um.y * 6.);
                 
                 ro.xy = mul(ro.xy, my);
                 ro.xz = mul(ro.xz, mx);
@@ -295,13 +290,13 @@ Shader "Unlit/PlasmaGlobeShader"
 
                 float3 col = _BackgroundColor;
 
-                //Rays
+                //rays
                 for (int j = 0; j < _NumRays; j++)
                 {
                     ro = bro;
                     rd = brd;
 
-                    float2x2 mm = mm2((_Time.y * 0.1 + ((j + 1.) * 5.1)) * j * 0.25);
+                    float2x2 mm = mm2(((_Time.y * _Speed) * 0.1 + ((j + 1.) * 5.1)) * j * 0.25);
             
                     ro.xy = mul(ro.xy, mm);
                     ro.xz = mul(ro.xz, mm);
@@ -317,7 +312,7 @@ Shader "Unlit/PlasmaGlobeShader"
                     col = max(col, vmarch(pos, rd, j, bro));
                 }
 
-                //Sphere
+                //sphere
                 ro = bro;
                 rd = brd;
                 float2 sph = iSphere2(ro, rd);
@@ -331,7 +326,6 @@ Shader "Unlit/PlasmaGlobeShader"
                     float nz = (-log(abs(flow(rf * 1.2) - .01)));
                     float nz2 = (-log(abs(flow(rf2 * 1.2) - .01)));
 
-                    //col += (0.1 * nz * nz * float3(0.12, 0.12, .5) + 0.05 * nz2 * nz2 * float3(0.55, 0.2, .55)) * 0.8;
                     col += nz * nz * _BackgroundSphereColor + 0.05 * nz2 * nz2;
                 }
 
