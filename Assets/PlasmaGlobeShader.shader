@@ -145,36 +145,32 @@ Shader "Unlit/PlasmaGlobeShader"
                 float sns2 = sins(d + i * 0.5) * _DispersionPercent;
                 float sns = sins(d + i * .6) * _DispersionPercent;
 
-                en.xz = mul(en.xz, mm2(((hash(i * 10.569) - .5) * 6.2 + sns2) * _RaysRange / 180));
+                en.xz = mul(en.xz, mm2((hash(i * 10.569) - .5) * 6.2 + sns2));
                 en.xy = mul(en.xy, mm2((hash(i * 4.732) - .5) * 6.2 + sns));
 
                 return en * _StartRaysPercent;
             }
 
-            float segm(float3 p, float3 a, float3 b)
+            float segm(float3 p, float3 b)
             {
-                float3 pa = p - a;
-                float3 ba = b - a;
-                float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.);
+                float h = clamp(dot(p, b) / dot(b, b), 0., 1.);
 
-                return length(pa - ba * h) * .5;
+                return length(p - b * h) * .5;
             }
 
             float2 map(float3 p, float i)
             {
                 float lp = length(p);
-                float3 bg = (0.);
                 float3 en = path(i, lp);
+    
                 float hearthSizeMax = 0.25;
-
                 float ins = smoothstep(hearthSizeMax * _HearthSize, 0.45, lp);
-                float outs = .15 + smoothstep(.0, .15, abs(lp - 1.));
+                float outs = .15 + smoothstep(0., .15, abs(lp - 1.));
                 float id = ins * outs;
                 p *= ins * outs;
 
                 float raysSizeBase = 0.011;
-
-                float rz = segm(p, bg, en) - (raysSizeBase * _RaysSize);
+                float rz = segm(p, en) - (raysSizeBase * _RaysSize);
 
                 return float2(rz, id);
             }

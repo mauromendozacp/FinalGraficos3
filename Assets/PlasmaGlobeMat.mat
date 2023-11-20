@@ -67,6 +67,7 @@ Material:
     - _GlossMapScale: 1
     - _Glossiness: 0.5
     - _GlossyReflections: 1
+    - _HearthSize: 0.5
     - _Metallic: 0
     - _Mode: 0
     - _MyRangeProperty: 0
@@ -82,7 +83,7 @@ Material:
     - _SphereSizePercent: 1.15
     - _SrcBlend: 1
     - _StartRaysPercent: 1
-    - _Test: 6
+    - _Test: -10
     - _UVSec: 0
     - _ZWrite: 1
     - _Zoom: 0.75
