@@ -147,6 +147,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 return en;
             }
 
+            //ray's segmentation
             float segm(float3 p, float3 b)
             {
                 float h = clamp(dot(p, b) / dot(b, b), 0., 1.);
@@ -154,6 +155,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 return length(p - b * h) * .5;
             }
 
+            //sizes of hearth and rays
             float2 map(float3 p, float i)
             {
                 float lp = length(p);
@@ -171,6 +173,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 return float2(rz, id);
             }
 
+            //marching
             float march(in float3 ro, in float3 rd, in float startf, in float maxd, in float j)
             {
                 float precis = 0.001;
@@ -214,7 +217,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 return sum;
             }
 
-            //Returns both collision dists of unit sphere
+            //returns both collision dists of unit sphere
             float2 iSphere2(in float3 ro, in float3 rd)
             {
                 float3 oc = ro;
@@ -226,17 +229,16 @@ Shader "Unlit/PlasmaGlobeShader"
                 {
                     return (-1.);
                 }
-                else
-                {
-                    return float2((-b - sqrt(h)), (-b + sqrt(h)));
-                }
-            }
+                
+                return float2((-b - sqrt(h)), (-b + sqrt(h)));
+}
 
             float grid(float3 p)
             {
                 return sin(p.x) * cos(p.y);
             }
 
+            //billowing effect flow
             float flow(in float3 p)
             {
                 float z = 2.;
@@ -329,7 +331,7 @@ Shader "Unlit/PlasmaGlobeShader"
                     col += nz * nz * _BackgroundSphereColor + 0.05 * nz2 * nz2;
                 }
 
-                return float4(col * 1.3, 1.0);
+                return float4(col, 1.0);
             }
 
             ENDCG
