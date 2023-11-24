@@ -36,8 +36,6 @@ Shader "Unlit/PlasmaGlobeShader"
 
             #include "UnityCG.cginc"
 
-            #define iMouse _MousePos
-
             struct appdata
             {
                 float4 vertex : POSITION;
@@ -50,7 +48,8 @@ Shader "Unlit/PlasmaGlobeShader"
                 float4 vertex : SV_POSITION;
             };
 
-            float4 iMouse;
+            float _MouseX;
+            float _MouseY;
 
             sampler2D _MainTex;
             float4 _MainTex_ST;
@@ -135,11 +134,19 @@ Shader "Unlit/PlasmaGlobeShader"
             }
 
             //ray's pattern
-            float3 path(in float i, in float d)
+            float3 path(in float i, in float d, in float3 hit)
             {
                 float3 en = float3(0., 0., 1.);
                 float sns2 = sins(d + i * 0.5) * _DispersionPercent;
                 float sns = sins(d + i * .6) * _DispersionPercent;
+    
+                if (dot(hit, hit) > 0.)
+                {
+                    // mouse interaction
+                    hit.xz = mul(hit.xz, mm2(sns2 * .5));
+                    hit.xy = mul(hit.xy, mm2(sns * .3));
+                    return hit;
+                }
 
                 en.xz = mul(en.xz, mm2((hash(i * 10.569) - .5) * 6.2 + sns2));
                 en.xy = mul(en.xy, mm2((hash(i * 4.732) - .5) * 6.2 + sns));
@@ -156,10 +163,10 @@ Shader "Unlit/PlasmaGlobeShader"
             }
 
             //sizes of hearth and rays
-            float2 map(float3 p, float i)
+            float2 map(float3 p, float i, in float3 hit)
             {
                 float lp = length(p);
-                float3 en = path(i, lp);
+                float3 en = path(i, lp, hit);
     
                 float hearthSizeMax = 0.25;
                 float ins = smoothstep(hearthSizeMax * _HearthSize, 0.45, lp);
@@ -174,7 +181,7 @@ Shader "Unlit/PlasmaGlobeShader"
             }
 
             //marching
-            float march(in float3 ro, in float3 rd, in float startf, in float maxd, in float j)
+            float march(in float3 ro, in float3 rd, in float startf, in float maxd, in float j, in float3 hit)
             {
                 float precis = 0.001;
                 float h = 0.5;
@@ -185,14 +192,14 @@ Shader "Unlit/PlasmaGlobeShader"
                     if (abs(h) < precis || d > maxd) break;
 
                     d += h * 1.2;
-                    h = map(ro + rd * d, j).x;
+                    h = map(ro + rd * d, j, hit).x;
                 }
 
                 return d;
             }
 
             //volumetric marching
-            float3 vmarch(in float3 ro, in float3 rd, in float j, in float3 orig)
+            float3 vmarch(in float3 ro, in float3 rd, in float j, in float3 orig, in float3 hit)
             {
                 float3 p = ro;
                 float2 r = (0.);
@@ -201,7 +208,7 @@ Shader "Unlit/PlasmaGlobeShader"
 
                 for (int i = 0; i < 15; i++)
                 {
-                    r = map(p, j);
+                    r = map(p, j, hit);
                     p += rd * .03;
 
                     float lp = length(p);
@@ -272,7 +279,7 @@ Shader "Unlit/PlasmaGlobeShader"
             fixed4 frag(v2f i) : SV_Target
             {
                 float2 p = i.uv - 0.5;
-                float2 um = iMouse.xy - .5;
+                float2 um = float2(_MouseX, _MouseY);
 
                 //camera
                 float3 ro = float3(0., 0., 5.);
@@ -306,12 +313,45 @@ Shader "Unlit/PlasmaGlobeShader"
                     rd.xy = mul(rd.xy, mm);
                     rd.xz = mul(rd.xz, mm);
 
-                    float rz = march(ro, rd, 2.5, 6., j);
+                    float rz = march(ro, rd, 2.5, 6., j, float3(0., 0., 0.));
 
                     if (rz >= 6.) continue; 
 
                     float3 pos = ro + mul(rz, rd);
-                    col = max(col, vmarch(pos, rd, j, bro));
+                    col = max(col, vmarch(pos, rd, j, bro, float3(0., 0., 0.)));
+                }
+    
+                //mouse interaction
+                float3 hit = float3(0., 0., 0.);
+                float3 rdm = normalize(float3(um * .7, -1.5));
+                rdm.xz = mul(rdm.xz, mx);
+                rdm.xy = mul(rdm.xy, my);
+    
+                // Compute intersection point between the surface of the sphere
+                // and the ray casted by the mouse
+                if (_MouseX > 0.)
+                {
+                    float2 res = iSphere2(bro, rdm);
+                    if (res.x > 0.)
+                    {
+                        hit = bro + res.x * rdm;
+                    }
+                }
+    
+                // Cast a final ray for the light path of the mouse
+                if (dot(hit, hit) != 0.)
+                {
+                    float j = _NumRays + 1.;
+                    ro = bro;
+                    rd = brd;
+                    float2x2 mm = mm2((_Time.y * 0.1 + ((j + 1.) * 5.1)) * j * 0.25);
+        
+                    float rz = march(ro, rd, 2.5, 6., j, hit);
+                    if (rz < 6.)
+                    {
+                        float3 pos = ro + rz * rd;
+                        col = max(col, vmarch(pos, rd, j, bro, hit));
+                    }
                 }
 
                 //sphere

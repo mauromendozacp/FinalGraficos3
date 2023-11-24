@@ -70,6 +70,8 @@ Material:
     - _HearthSize: 0.5
     - _Metallic: 0
     - _Mode: 0
+    - _MouseX: 0
+    - _MouseY: 0
     - _MyRangeProperty: 0
     - _NumRays: 13
     - _OcclusionStrength: 1
@@ -80,10 +82,11 @@ Material:
     - _RaysSize: 1
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
+    - _Speed: 1.71
     - _SphereSizePercent: 1.15
     - _SrcBlend: 1
     - _StartRaysPercent: 1
-    - _Test: -10
+    - _Test: 1
     - _UVSec: 0
     - _ZWrite: 1
     - _Zoom: 0.75
