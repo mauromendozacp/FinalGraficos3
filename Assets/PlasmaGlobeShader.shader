@@ -9,7 +9,8 @@ Shader "Unlit/PlasmaGlobeShader"
         _RaysRange ("Rays Range", Range(0, 180)) = 1
         _RaysSize ("Rays Size", Range(0.5, 2)) = 1
         _HearthSize ("Hearth Size", Range(0, 1)) = 1
-        _Speed ("Speed", Range(0, 5)) = 1
+        _SpeedRays ("Speed Rays", Range(0, 5)) = 1
+        _SpeedSphere ("Speed Rays", Range(0, 5)) = 1
 
         _BackgroundColor ("Background Color", Color) = (0.0, 0.0, 0.0, 1)
         _BackgroundSphereColor ("Background Sphere Color", Color) = (0.0, 0.0, 0.0, 1)
@@ -50,6 +51,11 @@ Shader "Unlit/PlasmaGlobeShader"
 
             float _MouseX;
             float _MouseY;
+            bool _EnableCast;
+
+            float _PosX;
+            float _PosY;
+            bool _EnableMoveCamera;
 
             sampler2D _MainTex;
             float4 _MainTex_ST;
@@ -58,7 +64,8 @@ Shader "Unlit/PlasmaGlobeShader"
             float _RaysRange;
             float _RaysSize;
             float _HearthSize;
-            float _Speed;
+            float _SpeedRays;
+            float _SpeedSphere;
 
             float3 _BackgroundColor;
             float3 _BackgroundSphereColor;
@@ -137,7 +144,7 @@ Shader "Unlit/PlasmaGlobeShader"
             float3 path(in float i, in float d, in float3 hit)
             {
                 float3 en = float3(0., 0., 1.);
-                float sns2 = sins(d + i * 0.5) * _DispersionPercent;
+                float sns2 = sins(d + i * .5) * _DispersionPercent;
                 float sns = sins(d + i * .6) * _DispersionPercent;
     
                 if (dot(hit, hit) > 0.)
@@ -155,11 +162,14 @@ Shader "Unlit/PlasmaGlobeShader"
             }
 
             //ray's segmentation
-            float segm(float3 p, float3 b)
+            float segm(float3 p, float3 a)
             {
-                float h = clamp(dot(p, b) / dot(b, b), 0., 1.);
+                float3 b = float3(0., 0., 0.);
+                float3 pa = p - a;
+                float3 ba = b - a;
+                float h = clamp(dot(pa, ba) / dot(ba, ba), 0., 1.);
 
-                return length(p - b * h) * .5;
+                return length(pa - ba * h) * .5;
             }
 
             //sizes of hearth and rays
@@ -169,10 +179,10 @@ Shader "Unlit/PlasmaGlobeShader"
                 float3 en = path(i, lp, hit);
     
                 float hearthSizeMax = 0.25;
-                float ins = smoothstep(hearthSizeMax * _HearthSize, 0.45, lp);
+                float ins = smoothstep(hearthSizeMax * _HearthSize, 0.46, lp);
                 float outs = .15 + smoothstep(0., .15, abs(lp - 1.));
-                float id = ins * outs;
                 p *= ins * outs;
+                float id = ins * outs;
 
                 float raysSizeBase = 0.011;
                 float rz = segm(p, en) - (raysSizeBase * _RaysSize);
@@ -187,9 +197,12 @@ Shader "Unlit/PlasmaGlobeShader"
                 float h = 0.5;
                 float d = startf;
 
-                for (int i = 0; i < 25; i++)
+                for (int i = 0; i < 35; i++)
                 {
-                    if (abs(h) < precis || d > maxd) break;
+                    if (abs(h) < precis || d > maxd)
+                    {
+                        break;
+                    }
 
                     d += h * 1.2;
                     h = map(ro + rd * d, j, hit).x;
@@ -206,7 +219,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 float3 sum = (0.);
                 float w = 0.;
 
-                for (int i = 0; i < 15; i++)
+                for (int i = 0; i < 19; i++)
                 {
                     r = map(p, j, hit);
                     p += rd * .03;
@@ -232,7 +245,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 float c = dot(oc, oc) - 1.;
                 float h = b * b - c;
 
-                if (h < 0.0)
+                if (h < .0)
                 {
                     return (-1.);
                 }
@@ -278,15 +291,24 @@ Shader "Unlit/PlasmaGlobeShader"
 
             fixed4 frag(v2f i) : SV_Target
             {
-                float2 p = i.uv - 0.5;
-                float2 um = float2(_MouseX, _MouseY);
+                float2 p = i.uv - .5;
+                float2 um = float2(_MouseX, _MouseY) - .5;
+                float2 pos = float2(_PosX, _PosY);
 
                 //camera
                 float3 ro = float3(0., 0., 5.);
                 float3 rd = normalize(float3(p * .7, -_Zoom));
     
-                float2x2 mx = mm2((_Time.y * _Speed) *.4 + um.x * 6.);
-                float2x2 my = mm2((_Time.y * _Speed) *.3 + um.y * 6.);
+                float ss = _Time.y * _SpeedSphere;
+                float sr = _Time.y * _SpeedRays;
+                if (_EnableMoveCamera)
+                {
+                    ss = .0;
+                    sr = .0;
+                }
+    
+                float2x2 mx = mm2(ss * .4 + pos.x);
+                float2x2 my = mm2(ss * .3 + pos.y);
                 
                 ro.xy = mul(ro.xy, my);
                 ro.xz = mul(ro.xz, mx);
@@ -305,7 +327,7 @@ Shader "Unlit/PlasmaGlobeShader"
                     ro = bro;
                     rd = brd;
 
-                    float2x2 mm = mm2(((_Time.y * _Speed) * 0.1 + ((j + 1.) * 5.1)) * j * 0.25);
+                    float2x2 mm = mm2((sr * 0.1 + ((j + 1.) * 5.1)) * j * 0.25);
             
                     ro.xy = mul(ro.xy, mm);
                     ro.xz = mul(ro.xz, mm);
@@ -322,38 +344,38 @@ Shader "Unlit/PlasmaGlobeShader"
                 }
     
                 //mouse interaction
-                float3 hit = float3(0., 0., 0.);
-                float3 rdm = normalize(float3(um * .7, -1.5));
-                rdm.xz = mul(rdm.xz, mx);
-                rdm.xy = mul(rdm.xy, my);
-    
-                // Compute intersection point between the surface of the sphere
-                // and the ray casted by the mouse
-                if (_MouseX > 0.)
+                if (_EnableCast)
                 {
+                    float3 hit = float3(0., 0., 0.);
+                    float3 rdm = normalize(float3(um * .7, -1.5));
+                    rdm.xz = mul(rdm.xz, mx);
+                    rdm.xy = mul(rdm.xy, my);
+    
+                    // Compute intersection point between the surface of the sphere
+                    // and the ray casted by the mouse
                     float2 res = iSphere2(bro, rdm);
                     if (res.x > 0.)
                     {
                         hit = bro + res.x * rdm;
                     }
-                }
     
-                // Cast a final ray for the light path of the mouse
-                if (dot(hit, hit) != 0.)
-                {
-                    float j = _NumRays + 1.;
-                    ro = bro;
-                    rd = brd;
-                    float2x2 mm = mm2((_Time.y * 0.1 + ((j + 1.) * 5.1)) * j * 0.25);
-        
-                    float rz = march(ro, rd, 2.5, 6., j, hit);
-                    if (rz < 6.)
+                    // Cast a final ray for the light path of the mouse
+                    if (dot(hit, hit) != 0.)
                     {
-                        float3 pos = ro + rz * rd;
-                        col = max(col, vmarch(pos, rd, j, bro, hit));
+                        float j = _NumRays + 1.;
+                        ro = bro;
+                        rd = brd;
+                        float2x2 mm = mm2((_Time.y * 0.1 + ((j + 1.) * 5.1)) * j * 0.25);
+        
+                        float rz = march(ro, rd, 2.5, 6., j, hit);
+                        if (rz < 6.)
+                        {
+                            float3 pos = ro + rz * rd;
+                            col = max(col, vmarch(pos, rd, j, bro, hit));
+                        }
                     }
                 }
-
+    
                 //sphere
                 ro = bro;
                 rd = brd;
