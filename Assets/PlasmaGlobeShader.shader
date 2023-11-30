@@ -49,17 +49,17 @@ Shader "Unlit/PlasmaGlobeShader"
 				float4 vertex : SV_POSITION;
 			};
 
-            #define iMouse _MousePos
-            float4 iMouse;
-
             #define iResolution _ScreenParams
 
             #define iTime _Time.y
 
+            float _MouseX;
+            float _MouseY;
+            bool _EnableCast;
+
             float _PosX;
             float _PosY;
             bool _EnableMoveCamera;
-            bool _EnableCast;
 
             sampler2D _MainTex;
             float4 _MainTex_ST;
@@ -105,7 +105,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 f = f * f * (3.0 - 2.0 * f);
         
                 float2 uv = (((p.xy + float2(37.0, 17.0) * p.z) + f.xy) + 0.5) / 256.0;
-                float2 rg = tex2Dlod(_MainTex, float4(uv.x, uv.y, 0, 0)).yx;
+                float2 rg = tex2D(_MainTex, ((uv + 0.5) / 256.0, 0.0)).yx;
                 return lerp(rg.x, rg.y, f.z);
             }
 
@@ -210,10 +210,7 @@ Shader "Unlit/PlasmaGlobeShader"
 
                 for (int i = 0; i < 35; i++)
                 {
-                    if (abs(h) < precis || d > maxd)
-                    {
-                        break;
-                    }
+                    if (abs(h) < precis || d > maxd) break;
 
                     d += h * 1.2;
                     h = map(ro + rd * d, j, hit).x;
@@ -305,15 +302,14 @@ Shader "Unlit/PlasmaGlobeShader"
                 float2 uv = i.uv / iResolution.xy - .5;
                 uv.x *= iResolution.x / iResolution.y;
     
-                float2 um = iMouse.xy / iResolution.xy - .5;
-                um.x *= iResolution.x / iResolution.y;
-    
+                float2 um = float2(_MouseX, _MouseY);
                 float2 pos = float2(_PosX, _PosY);
 
                 //camera
                 float3 ro = float3(0., 0., 5.);
                 float3 rd = normalize(float3(uv * .7, -_Zoom));
     
+                //speeds
                 float ss = iTime * _SpeedSphere;
                 float sr = iTime * _SpeedRays;
                 if (_EnableMoveCamera)
@@ -362,33 +358,30 @@ Shader "Unlit/PlasmaGlobeShader"
                 if (_EnableCast)
                 {
                     float3 hit = (0.);
-                    float3 rdm = normalize(float3(um * .7, -1.5));
-                    rdm.xz = mul(rdm.xz, mx);
+                    float3 rdm = normalize(float3(um * .05, -_Zoom));
                     rdm.xy = mul(rdm.xy, my);
+                    rdm.xz = mul(rdm.xz, mx);
     
-                    // Compute intersection point between the surface of the sphere
-                    // and the ray casted by the mouse
-                    if (iMouse.z > .0)
+                    // Compute intersection point between the surface of the sphere and the ray casted by the mouse
+                    float2 res = iSphere2(bro, rdm);
+                    if (res.x > 0.)
                     {
-                        float2 res = iSphere2(bro, rdm);
-                        if (res.x > 0.)
-                        {
-                            hit = bro + res.x * rdm;
-                        }
+                        hit = bro + res.x * rdm;
                     }
         
                     // Cast a final ray for the light path of the mouse
                     if (dot(hit, hit) != 0.)
                     {
-                        float j = _NumRays + 1.;
+                        float j = _NumRays;
                         ro = bro;
                         rd = brd;
                         float2x2 mm = mm2((sr * 0.1 + ((j + 1.) * 5.1)) * j * 0.25);
-        
+            
                         float rz = march(ro, rd, 2.5, 6., j, hit);
+
                         if (rz < 6.)
                         {
-                            float3 pos = ro + rz * rd;
+                            float3 pos = ro + mul(rz, rd);
                             col = max(col, vmarch(pos, rd, j, bro, hit));
                         }
                     }
