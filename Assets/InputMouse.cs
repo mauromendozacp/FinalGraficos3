@@ -14,16 +14,11 @@ public class InputMouse : MonoBehaviour
     {
         if (Input.GetMouseButton(0))
         {
-            Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            plasmaSprite.material.SetFloat("_MouseX", mousePos.x);
-            plasmaSprite.material.SetFloat("_MouseY", mousePos.y);
             plasmaSprite.material.SetInt("_EnableCast", 1);
         }
 
         if (Input.GetMouseButtonUp(0))
         {
-            plasmaSprite.material.SetFloat("_MouseX", 0);
-            plasmaSprite.material.SetFloat("_MouseY", 0);
             plasmaSprite.material.SetInt("_EnableCast", 0);
         }
     }
