@@ -2,7 +2,6 @@ Shader "Unlit/PlasmaGlobeShader"
 {
     Properties
     {
-        _MainTex ("Texture", 2D) = "white" {}
         _Zoom ("Zoom", Range(0, 5)) = 1.5
         
         _NumRays ("Rays Count", Int) = 13
@@ -12,14 +11,15 @@ Shader "Unlit/PlasmaGlobeShader"
         _SpeedSphere ("Speed Sphere", Range(0, 5)) = 1
 
         _BackgroundColor ("Background Color", Color) = (0.0, 0.0, 0.0, 1)
-        _BackgroundSphereColor ("Background Sphere Color", Color) = (0.0, 0.0, 0.0, 1)
+        _BackgroundSphereColor1 ("Background Sphere Color 1", Color) = (0.0, 0.0, 0.0, 1)
+        _BackgroundSphereColor2 ("Background Sphere Color 2", Color) = (0.0, 0.0, 0.0, 1)
         _BaseColor ("Base Color", Color) = (1.0, 1.0, 1.0, 1.0)
         _RaysColor ("Rays Color", Color) = (1.0, 1.0, 1.0, 1.0)
 
         [Toggle] _RaysNoiseActived ("Rays Noise", Float) = 0
         _DispersionPercent ("Dispersion Percentage", Range(0, 1)) = 0.25
 
-        _Test ("Test", Range(0, 1)) = 1
+        _Test ("Test", Range(0, 256)) = 1
     }
 
     SubShader
@@ -71,7 +71,8 @@ Shader "Unlit/PlasmaGlobeShader"
             float _SpeedSphere;
 
             float3 _BackgroundColor;
-            float3 _BackgroundSphereColor;
+            float3 _BackgroundSphereColor1;
+            float3 _BackgroundSphereColor2;
             float3 _BaseColor;
             float3 _RaysColor;
 
@@ -93,20 +94,65 @@ Shader "Unlit/PlasmaGlobeShader"
 				return o;
             }
 
+            float grid(float3 p)
+            {
+                return sin(p.x) * cos(p.y);
+            }
+
             float noise(in float x)
             {
                 return tex2Dlod(_MainTex, float4(x * .01, 1., 0., 0.)).x;
             }
 
-            float noise(in float3 x) 
+            float hash(float n)
             {
-                float3 p = floor(x);
-                float3 f = frac(x);
-                f = f * f * (3.0 - 2.0 * f);
-        
-                float2 uv = (((p.xy + float2(37.0, 17.0) * p.z) + f.xy) + 0.5) / 256.0;
-                float2 rg = tex2D(_MainTex, ((uv + 0.5) / 256.0, 0.0)).yx;
-                return lerp(rg.x, rg.y, f.z);
+                return frac(sin(n) * 43758.5453);
+            }
+
+            // Función de hash 2D
+            float2 hash2D(float2 p)
+            {
+                p = frac(sin(p * float2(37.0, 41.0)) * 43758.5453123);
+                return frac((p.x + p.y) * p);
+            }
+
+            // Función de ruido 2D
+            float noise2D(float2 p)
+            {
+                float2 i = floor(p);
+                float2 f = frac(p);
+
+                // Vecinos en la rejilla
+                float2 v00 = hash2D(i);
+                float2 v10 = hash2D(i + float2(1, 0));
+                float2 v01 = hash2D(i + float2(0, 1));
+                float2 v11 = hash2D(i + float2(1, 1));
+
+                // Interpolación bilineal
+                float x = smoothstep(0.0, 1.0, f.x);
+                float y = smoothstep(0.0, 1.0, f.y);
+
+                float2 v0 = lerp(v00, v10, x);
+                float2 v1 = lerp(v01, v11, x);
+
+                return lerp(v0, v1, y);
+            }
+
+            float flow(in float3 p, in float t)
+            {
+                float z = 2.;
+                float rz = 0.;
+                float3 bp = p;
+                for (float i = 1.; i < 5.; i++)
+                {
+                    p += iTime * .1;
+                    rz += (sin(noise2D(((p + t * 0.8).x, (p + t * 0.8).y)) * 6.) * 0.5 + 0.5) / z;
+                    p = lerp(bp, p, 0.6);
+                    z *= 2.;
+                    p *= 2.01;
+                    p = mul(p, m3);
+                }
+                return rz;
             }
 
             float sins(in float x)
@@ -131,16 +177,6 @@ Shader "Unlit/PlasmaGlobeShader"
                 }
 
                 return rz;
-            }
-
-            float hash(float n)
-            {
-                return frac(sin(n) * 43758.5453);
-            }
-
-            float2 hash2(float n)
-            {
-                return frac(sin(float2(n, n + 1.0)) * float2(43758.5453123, 22578.1459123));
             }
 
             float2x2 mm2(in float a)
@@ -259,42 +295,6 @@ Shader "Unlit/PlasmaGlobeShader"
                 }
                 
                 return float2((-b - sqrt(h)), (-b + sqrt(h)));
-}
-
-            float grid(float3 p)
-            {
-                return sin(p.x) * cos(p.y);
-            }
-
-            //billowing effect flow
-            float flow(in float3 p)
-            {
-                float z = 2.;
-                float rz = 0.;
-                float3 bp = p;
-    
-                for (float i = 1.; i < 5.; i++)
-                {
-		            //movement
-                    p += iTime * 0.25;
-                    bp -= iTime * .3;
-		
-		            //displacement map
-                    float3 gr = float3(grid(p * 3. - iTime * 1.), grid(p * 3.5 + 4. - iTime * 1.), grid(p * 4. + 4. -iTime * 1.));
-                    p += gr * 0.15;
-                    rz += (sin(noise(p) * 8.) * 0.5 + 0.5) / z;
-		
-		            //advection factor (.1 = billowing, .9 high advection)
-                    p = lerp(bp, p, .7);
-		
-		            //scale and rotate
-                    z *= 2.;
-                    p = mul(p, 2.01);
-                    p = mul(p, m3);
-                    bp = mul(bp, 1.7);
-                    bp = mul(bp, m3);
-                }
-                return rz;
             }
 
             fixed4 frag(v2f i) : SV_Target
@@ -398,10 +398,10 @@ Shader "Unlit/PlasmaGlobeShader"
                     float3 pos2 = ro + rd * sph.y;
                     float3 rf = reflect(rd, pos);
                     float3 rf2 = reflect(rd, pos2);
-                    float nz = (-log(abs(flow(rf * 1.2) - .01)));
-                    float nz2 = (-log(abs(flow(rf2 * 1.2) - .01)));
+                    float nz = (-log(abs(flow(rf * 1.2, iTime) - .1)));
+                    float nz2 = (-log(abs(flow(rf2 * 1.2, -iTime) - .1)));
 
-                    col += nz * nz * _BackgroundSphereColor + 0.05 * nz2 * nz2;
+                    col += (0.1 * nz * nz * _BackgroundSphereColor1 + 0.05 * nz2 * nz2 * _BackgroundSphereColor2) * 0.8;
                 }
 
                 return float4(col, 1.0);
