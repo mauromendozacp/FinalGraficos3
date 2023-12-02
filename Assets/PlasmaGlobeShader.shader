@@ -25,7 +25,6 @@ Shader "Unlit/PlasmaGlobeShader"
     SubShader
     {
         Tags { "RenderType" = "Opaque" }
-        Cull Off ZWrite Off ZTest Always
         LOD 100
 
         Pass
@@ -33,7 +32,6 @@ Shader "Unlit/PlasmaGlobeShader"
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #pragma multi_compile_fog
 
             #include "UnityCG.cginc"
 
@@ -50,7 +48,6 @@ Shader "Unlit/PlasmaGlobeShader"
 			};
 
             #define iResolution _ScreenParams
-
             #define iTime _Time.y
 
             float _MouseX;
@@ -62,7 +59,6 @@ Shader "Unlit/PlasmaGlobeShader"
             bool _EnableMoveCamera;
 
             sampler2D _MainTex;
-            float4 _MainTex_ST;
 
             int _NumRays;
             float _RaysSize;
@@ -99,36 +95,32 @@ Shader "Unlit/PlasmaGlobeShader"
                 return sin(p.x) * cos(p.y);
             }
 
-            float noise(in float x)
-            {
-                return tex2Dlod(_MainTex, float4(x * .01, 1., 0., 0.)).x;
-            }
-
             float hash(float n)
             {
                 return frac(sin(n) * 43758.5453);
             }
 
-            // Función de hash 2D
-            float2 hash2D(float2 p)
+            float2 hash(float2 p)
             {
                 p = frac(sin(p * float2(37.0, 41.0)) * 43758.5453123);
                 return frac((p.x + p.y) * p);
             }
 
-            // Función de ruido 2D
-            float noise2D(float2 p)
+            float noise(in float x)
+            {
+                return tex2Dlod(_MainTex, float4(x * .01, 1., 0., 0.)).x;
+            }
+
+            float noise(float3 p)
             {
                 float2 i = floor(p);
                 float2 f = frac(p);
-
-                // Vecinos en la rejilla
-                float2 v00 = hash2D(i);
-                float2 v10 = hash2D(i + float2(1, 0));
-                float2 v01 = hash2D(i + float2(0, 1));
-                float2 v11 = hash2D(i + float2(1, 1));
-
-                // Interpolación bilineal
+    
+                float2 v00 = hash(i);
+                float2 v10 = hash(i + float2(1, 0));
+                float2 v01 = hash(i + float2(0, 1));
+                float2 v11 = hash(i + float2(1, 1));
+    
                 float x = smoothstep(0.0, 1.0, f.x);
                 float y = smoothstep(0.0, 1.0, f.y);
 
@@ -145,8 +137,8 @@ Shader "Unlit/PlasmaGlobeShader"
                 float3 bp = p;
                 for (float i = 1.; i < 5.; i++)
                 {
-                    p += iTime * .1;
-                    rz += (sin(noise2D(((p + t * 0.8).x, (p + t * 0.8).y)) * 6.) * 0.5 + 0.5) / z;
+                    p += iTime * 2.5;
+                    rz += (sin(noise(p + t * 0.8) * 6.) * 0.5 + 0.5) / z;
                     p = lerp(bp, p, 0.6);
                     z *= 2.;
                     p *= 2.01;
@@ -173,7 +165,7 @@ Shader "Unlit/PlasmaGlobeShader"
                     rz += abs(frac(x * 1.4) - 0.5) / z;
                     x *= 1.3;
                     z *= 1.15;
-                    x -= iTime * .65 * z;
+                    x -= (sin(iTime / 3.1415)) + iTime * .65 * z;
                 }
 
                 return rz;
@@ -194,9 +186,9 @@ Shader "Unlit/PlasmaGlobeShader"
                 float sns2 = sins(d + i * .5) * _DispersionPercent;
                 float sns = sins(d + i * .6) * _DispersionPercent;
     
+                // mouse interaction
                 if (dot(hit, hit) > 0.)
                 {
-                    // mouse interaction
                     hit.xz = mul(hit.xz, mm2(sns2 * .5));
                     hit.xy = mul(hit.xy, mm2(sns * .3));
                     return hit;
@@ -297,7 +289,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 return float2((-b - sqrt(h)), (-b + sqrt(h)));
             }
 
-            fixed4 frag(v2f i) : SV_Target
+            float4 frag(v2f i) : SV_Target
             {
                 float2 uv = i.uv / iResolution.xy - .5;
                 uv.x *= iResolution.x / iResolution.y;
@@ -362,14 +354,14 @@ Shader "Unlit/PlasmaGlobeShader"
                     rdm.xy = mul(rdm.xy, my);
                     rdm.xz = mul(rdm.xz, mx);
     
-                    // Compute intersection point between the surface of the sphere and the ray casted by the mouse
+                    // compute intersection point between the surface of the sphere and the ray casted by the mouse
                     float2 res = iSphere2(bro, rdm);
                     if (res.x > 0.)
                     {
                         hit = bro + res.x * rdm;
                     }
         
-                    // Cast a final ray for the light path of the mouse
+                    // cast a final ray for the light path of the mouse
                     if (dot(hit, hit) != 0.)
                     {
                         float j = _NumRays;
