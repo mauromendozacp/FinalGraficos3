@@ -90,11 +90,6 @@ Shader "Unlit/PlasmaGlobeShader"
 				return o;
             }
 
-            float grid(float3 p)
-            {
-                return sin(p.x) * cos(p.y);
-            }
-
             float hash(float n)
             {
                 return frac(sin(n) * 43758.5453);
@@ -137,7 +132,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 float3 bp = p;
                 for (float i = 1.; i < 5.; i++)
                 {
-                    p += iTime * 2.5;
+                    p += iTime * 1.75;
                     rz += (sin(noise(p + t * 0.8) * 6.) * 0.5 + 0.5) / z;
                     p = lerp(bp, p, 0.6);
                     z *= 2.;
