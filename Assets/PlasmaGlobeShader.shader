@@ -54,8 +54,6 @@ Shader "Unlit/PlasmaGlobeShader"
             float _PosY;
             bool _EnableMoveCamera;
 
-            sampler2D _MainTex;
-
             int _NumRays;
             float _RaysSize;
             float _HearthSize;
@@ -97,7 +95,15 @@ Shader "Unlit/PlasmaGlobeShader"
 
             float noise(in float x)
             {
-                return tex2Dlod(_MainTex, float4(x * .01, 1., 0., 0.)).x;
+                float i = floor(x);
+                float f = frac(x);
+    
+                float u = f * f * (3.0 - 2.0 * f);
+    
+                float a = hash(i);
+                float b = hash(i + 1.0);
+    
+                return lerp(a, b, u);
             }
 
             float noise(float3 p)
