@@ -2,6 +2,7 @@ Shader "Unlit/PlasmaGlobeShader"
 {
     Properties
     {
+        _MainTex ("Texture", 2D) = "white" {}
         _Zoom ("Zoom", Range(0, 5)) = 1.5
         
         _NumRays ("Rays Count", Int) = 13
@@ -54,6 +55,8 @@ Shader "Unlit/PlasmaGlobeShader"
             float _PosY;
             bool _EnableMoveCamera;
 
+            sampler2D _MainTex;
+
             int _NumRays;
             float _RaysSize;
             float _HearthSize;
@@ -95,15 +98,7 @@ Shader "Unlit/PlasmaGlobeShader"
 
             float noise(in float x)
             {
-                float i = floor(x);
-                float f = frac(x);
-    
-                float u = f * f * (3.0 - 2.0 * f);
-    
-                float a = hash(i);
-                float b = hash(i + 1.0);
-    
-                return lerp(a, b, u);
+                return tex2Dlod(_MainTex, float4(x * .01, 1., 0., 0.)).x;
             }
 
             float noise(float3 p)
