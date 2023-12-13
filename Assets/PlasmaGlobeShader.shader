@@ -9,23 +9,19 @@ Shader "Unlit/PlasmaGlobeShader"
         _HearthSize ("Hearth Size", Range(0, 1)) = 1
         _SpeedRays ("Speed Rays", Range(0, 5)) = 1
         _SpeedSphere ("Speed Sphere", Range(0, 5)) = 1
+        _DispersionPercent ("Dispersion Percentage", Range(0, 1)) = 0.25
+        [Toggle] _RaysNoiseActived ("Rays Noise", Float) = 0
 
         _BackgroundColor ("Background Color", Color) = (0.0, 0.0, 0.0, 1)
         _BackgroundSphereColor1 ("Background Sphere Color 1", Color) = (0.0, 0.0, 0.0, 1)
         _BackgroundSphereColor2 ("Background Sphere Color 2", Color) = (0.0, 0.0, 0.0, 1)
         _BaseColor ("Base Color", Color) = (1.0, 1.0, 1.0, 1.0)
         _RaysColor ("Rays Color", Color) = (1.0, 1.0, 1.0, 1.0)
-
-        [Toggle] _RaysNoiseActived ("Rays Noise", Float) = 0
-        _DispersionPercent ("Dispersion Percentage", Range(0, 1)) = 0.25
-
-        _Test ("Test", Range(0, 256)) = 1
     }
 
     SubShader
     {
         Tags { "RenderType" = "Opaque" }
-        LOD 100
 
         Pass
         {
@@ -66,17 +62,15 @@ Shader "Unlit/PlasmaGlobeShader"
             float _SpeedRays;
             float _SpeedSphere;
 
+            bool _RaysNoiseActived;
+            float _DispersionPercent;
+            float _Zoom;
+
             float3 _BackgroundColor;
             float3 _BackgroundSphereColor1;
             float3 _BackgroundSphereColor2;
             float3 _BaseColor;
             float3 _RaysColor;
-
-            bool _RaysNoiseActived;
-            float _DispersionPercent;
-            float _Zoom;
-
-            float _Test;
 
             float3x3 m3 = float3x3( 0.00,  0.80,  0.60,
                                    -0.80,  0.36, -0.48,
@@ -125,6 +119,7 @@ Shader "Unlit/PlasmaGlobeShader"
                 return lerp(v0, v1, y);
             }
 
+            //flow's background sphere
             float flow(in float3 p, in float t)
             {
                 float z = 2.;
@@ -349,14 +344,13 @@ Shader "Unlit/PlasmaGlobeShader"
                     rdm.xy = mul(rdm.xy, my);
                     rdm.xz = mul(rdm.xz, mx);
     
-                    // compute intersection point between the surface of the sphere and the ray casted by the mouse
+                    //mouse collision with sphere
                     float2 res = iSphere2(bro, rdm);
                     if (res.x > 0.)
                     {
                         hit = bro + res.x * rdm;
                     }
         
-                    // cast a final ray for the light path of the mouse
                     if (dot(hit, hit) != 0.)
                     {
                         float j = _NumRays;
@@ -377,8 +371,8 @@ Shader "Unlit/PlasmaGlobeShader"
                 //sphere
                 ro = bro;
                 rd = brd;
+    
                 float2 sph = iSphere2(ro, rd);
-
                 if (sph.x > 0.)
                 {
                     float3 pos = ro + rd * sph.x;
